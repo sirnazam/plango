@@ -5,8 +5,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'map_screen.dart';
 
-// ─── CONSTANTS ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  CONSTANTS (Your existing + enhanced)
+// ─────────────────────────────────────────────
 const kTeal = Color(0xFF0EADBB);
+const kTealDark = Color(0xFF0A8A96);
 const kTealLight = Color(0xFFE1F5EE);
 const kBackground = Color(0xFFEAF4F8);
 const kCard = Colors.white;
@@ -15,7 +18,11 @@ const kTextSecondary = Color(0xFF7A9098);
 const kAmber = Color(0xFFF59E0B);
 const kGreen = Color(0xFF22C55E);
 
-// ─── MODELS ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  MODELS (Your existing + Interstate models)
+// ─────────────────────────────────────────────
+
+// Your existing models
 class CountryDestination {
   final String code;
   final String name;
@@ -94,7 +101,6 @@ class TravelTransport {
   });
 }
 
-// ─── ACTIVE BOOKING MODEL ──────────────────────────────────────────────────
 class ActiveBooking {
   final String tripId;
   final String origin;
@@ -119,7 +125,229 @@ class ActiveBooking {
   });
 }
 
-// ─── MOCK DATA ─────────────────────────────────────────────────────────────
+// NEW: Interstate models from second file
+class TransportMode {
+  final int id;
+  final String name;
+  final String slug;
+  final String icon;
+
+  const TransportMode({
+    required this.id,
+    required this.name,
+    required this.slug,
+    required this.icon,
+  });
+
+  factory TransportMode.fromMap(Map<String, dynamic> m) => TransportMode(
+        id: m['id'],
+        name: m['name'],
+        slug: m['slug'],
+        icon: m['icon'] ?? '🚌',
+      );
+}
+
+class StateModel {
+  final int id;
+  final String name;
+  final String countryCode;
+
+  const StateModel({
+    required this.id,
+    required this.name,
+    required this.countryCode,
+  });
+
+  factory StateModel.fromMap(Map<String, dynamic> m) => StateModel(
+        id: m['id'],
+        name: m['name'],
+        countryCode: m['country_code'],
+      );
+}
+
+class CountryModel {
+  final String code;
+  final String name;
+  final String? flag;
+  final String? currency;
+
+  const CountryModel({
+    required this.code,
+    required this.name,
+    this.flag,
+    this.currency,
+  });
+
+  factory CountryModel.fromMap(Map<String, dynamic> m) => CountryModel(
+        code: m['code'],
+        name: m['name'],
+        flag: m['flag'],
+        currency: m['currency'],
+      );
+}
+
+class InterstateRoute {
+  final int routeId;
+  final String country;
+  final String countryCode;
+  final String? countryFlag;
+  final String originTerminal;
+  final String originCity;
+  final String originState;
+  final String destinationTerminal;
+  final String destinationCity;
+  final String destinationState;
+  final String operator;
+  final double? operatorRating;
+  final String? operatorWebsite;
+  final String transportMode;
+  final String modeSlug;
+  final String modeIcon;
+  final double? distanceKm;
+  final int? durationMinutes;
+  final double? priceMin;
+  final double? priceMax;
+  final String currency;
+  final bool isActive;
+
+  const InterstateRoute({
+    required this.routeId,
+    required this.country,
+    required this.countryCode,
+    this.countryFlag,
+    required this.originTerminal,
+    required this.originCity,
+    required this.originState,
+    required this.destinationTerminal,
+    required this.destinationCity,
+    required this.destinationState,
+    required this.operator,
+    this.operatorRating,
+    this.operatorWebsite,
+    required this.transportMode,
+    required this.modeSlug,
+    required this.modeIcon,
+    this.distanceKm,
+    this.durationMinutes,
+    this.priceMin,
+    this.priceMax,
+    required this.currency,
+    required this.isActive,
+  });
+
+  factory InterstateRoute.fromMap(Map<String, dynamic> m) => InterstateRoute(
+        routeId: m['route_id'],
+        country: m['country'] ?? '',
+        countryCode: m['country_code'] ?? '',
+        countryFlag: m['country_flag'],
+        originTerminal: m['origin_terminal'] ?? '',
+        originCity: m['origin_city'] ?? '',
+        originState: m['origin_state'] ?? '',
+        destinationTerminal: m['destination_terminal'] ?? '',
+        destinationCity: m['destination_city'] ?? '',
+        destinationState: m['destination_state'] ?? '',
+        operator: m['operator'] ?? '',
+        operatorRating: (m['operator_rating'] as num?)?.toDouble(),
+        operatorWebsite: m['operator_website'],
+        transportMode: m['transport_mode'] ?? '',
+        modeSlug: m['mode_slug'] ?? '',
+        modeIcon: m['mode_icon'] ?? '🚌',
+        distanceKm: (m['distance_km'] as num?)?.toDouble(),
+        durationMinutes: m['duration_minutes'],
+        priceMin: (m['price_min'] as num?)?.toDouble(),
+        priceMax: (m['price_max'] as num?)?.toDouble(),
+        currency: m['currency'] ?? 'USD',
+        isActive: m['is_active'] ?? true,
+      );
+
+  String get durationText {
+    if (durationMinutes == null) return '';
+    final h = durationMinutes! ~/ 60;
+    final m = durationMinutes! % 60;
+    return h > 0 ? '${h}h ${m}m' : '${m}m';
+  }
+}
+
+// ─────────────────────────────────────────────
+//  SERVICE (NEW: Interstate service)
+// ─────────────────────────────────────────────
+
+class TravelService {
+  static final _sb = Supabase.instance.client;
+
+  static Future<List<CountryModel>> fetchCountriesWithRoutes() async {
+    final res = await _sb
+        .from('interstate_routes')
+        .select('country_code, countries!inner(code, name, flag, currency)')
+        .eq('is_active', true);
+
+    final seen = <String>{};
+    final list = <CountryModel>[];
+    for (final row in res as List) {
+      final c = row['countries'] as Map<String, dynamic>;
+      if (seen.add(c['code'] as String)) {
+        list.add(CountryModel.fromMap(c));
+      }
+    }
+    list.sort((a, b) => a.name.compareTo(b.name));
+    return list;
+  }
+
+  static Future<List<StateModel>> fetchStatesForCountry(String countryCode) async {
+    final res = await _sb
+        .from('states')
+        .select('id, name, country_code')
+        .eq('country_code', countryCode)
+        .order('name');
+    return (res as List).map((e) => StateModel.fromMap(e)).toList();
+  }
+
+  static Future<List<TransportMode>> fetchTransportModes() async {
+    final res = await _sb
+        .from('transport_modes')
+        .select('id, name, slug, icon')
+        .eq('is_active', true)
+        .order('id');
+    return (res as List).map((e) => TransportMode.fromMap(e)).toList();
+  }
+
+  static Future<List<InterstateRoute>> searchRoutes({
+    required String countryCode,
+    required int originStateId,
+    required int destinationStateId,
+    int? transportModeId,
+  }) async {
+    final originState = await _sb
+        .from('states')
+        .select('name')
+        .eq('id', originStateId)
+        .single();
+    final destState = await _sb
+        .from('states')
+        .select('name')
+        .eq('id', destinationStateId)
+        .single();
+
+    var query = _sb
+        .from('v_interstate_routes')
+        .select()
+        .eq('country_code', countryCode)
+        .eq('origin_state', originState['name'])
+        .eq('destination_state', destState['name'])
+        .eq('is_active', true);
+
+    if (transportModeId != null) {
+      query = query.eq('transport_mode_id', transportModeId);
+    }
+
+    final res = await query;
+    return (res as List).map((e) => InterstateRoute.fromMap(e)).toList();
+  }
+}
+
+// ─────────────────────────────────────────────
+//  MOCK DATA (Your existing)
+// ─────────────────────────────────────────────
 List<FlightOption> getFlights(String from, String to) => [
   const FlightOption(airline: 'Air France', flightNo: 'AF149', departure: '11:30', arrival: '06:20', duration: '6h 50m', price: 480, type: 'cheapest', stops: 0),
   const FlightOption(airline: 'Turkish Airlines', flightNo: 'TK626', departure: '09:15', arrival: '08:45', duration: '11h 30m', price: 390, type: 'budget', stops: 1),
@@ -147,14 +375,15 @@ List<TravelTransport> getTransport(String destination) => [
   const TravelTransport(type: 'Private Transfer', provider: 'Luxury Transfers', route: 'Airport → Hotel (VIP)', price: 120, duration: '20 min', icon: '🚐'),
 ];
 
-// ─── CABIN CLASSES ─────────────────────────────────────────────────────────
 const List<Map<String, dynamic>> cabinClasses = [
   {'label': 'Economy', 'icon': '💺', 'multiplier': 1.0},
   {'label': 'Business', 'icon': '🛋️', 'multiplier': 2.5},
   {'label': 'First Class', 'icon': '👑', 'multiplier': 4.0},
 ];
 
-// ─── MAIN SCREEN ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  MAIN SCREEN (Enhanced with Interstate)
+// ─────────────────────────────────────────────
 class TravelScreen extends StatefulWidget {
   const TravelScreen({super.key});
 
@@ -162,56 +391,94 @@ class TravelScreen extends StatefulWidget {
   State<TravelScreen> createState() => _TravelScreenState();
 }
 
-class _TravelScreenState extends State<TravelScreen> {
-  int _step = 0;
+class _TravelScreenState extends State<TravelScreen> with SingleTickerProviderStateMixin {
+  // Tab controller for Flights vs Interstate
+  late TabController _tabController;
+  int _selectedTab = 0;
 
+  // Your existing flow state
+  int _step = 0;
   CountryDestination? _selectedOriginCountry;
   String? _selectedOriginState;
   CountryDestination? _selectedDestinationCountry;
-
   FlightOption? _selectedFlight;
   HotelOption? _selectedHotel;
   TravelTransport? _selectedTransport;
-
   String _flightFilter = 'all';
   String _hotelFilter = 'all';
   String _cabinClass = 'Economy';
   String _mapMode = 'hotels';
-
   bool _isSelectingOrigin = false;
   bool _isSelectingState = false;
-
   final TextEditingController _searchCtrl = TextEditingController();
   String _countrySearch = '';
-
   DateTime? _departureDate;
   DateTime? _returnDate;
   int _passengers = 1;
   int _nights = 3;
-
   List<CountryDestination> _allCountries = [];
   bool _isLoadingCountries = true;
   String _countriesError = '';
-
-  // Active booking loaded from Supabase
   ActiveBooking? _activeBooking;
   bool _isLoadingActiveBooking = true;
   bool _isBooking = false;
 
+  // NEW: Interstate state
+  int _interstateStep = 0;
+  List<CountryModel> _interstateCountries = [];
+  List<StateModel> _interstateStates = [];
+  List<TransportMode> _transportModes = [];
+  List<InterstateRoute> _interstateResults = [];
+  CountryModel? _selectedInterstateCountry;
+  StateModel? _interstateOriginState;
+  StateModel? _interstateDestState;
+  TransportMode? _selectedTransportMode;
+  String _interstateModeFilter = 'all';
+  bool _loadingInterstateCountries = true;
+  bool _loadingInterstateStates = false;
+  bool _loadingInterstateResults = false;
+  String? _interstateError;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() => _selectedTab = _tabController.index);
+      }
+    });
     _loadCountriesFromSupabase();
     _loadActiveBooking();
+    _loadInterstateData();
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  // ─── LOAD ACTIVE BOOKING ──────────────────────────────────────────────────
+  // ─── LOAD INTERSTATE DATA ─────────────────────────────────────────────────
+  Future<void> _loadInterstateData() async {
+    try {
+      final data = await TravelService.fetchCountriesWithRoutes();
+      setState(() {
+        _interstateCountries = data;
+        _loadingInterstateCountries = false;
+      });
+      final modes = await TravelService.fetchTransportModes();
+      setState(() => _transportModes = modes);
+    } catch (e) {
+      setState(() {
+        _interstateError = 'Failed to load interstate data';
+        _loadingInterstateCountries = false;
+      });
+    }
+  }
+
+  // ─── YOUR EXISTING METHODS (unchanged) ────────────────────────────────────
   Future<void> _loadActiveBooking() async {
     setState(() => _isLoadingActiveBooking = true);
     try {
@@ -220,8 +487,6 @@ class _TravelScreenState extends State<TravelScreen> {
         setState(() => _isLoadingActiveBooking = false);
         return;
       }
-
-      // Get the most recent confirmed trip
       final trips = await Supabase.instance.client
           .from('trips')
           .select()
@@ -236,10 +501,7 @@ class _TravelScreenState extends State<TravelScreen> {
         });
         return;
       }
-
       final trip = trips[0];
-
-      // Get bookings for this trip
       final bookings = await Supabase.instance.client
           .from('bookings')
           .select()
@@ -286,7 +548,6 @@ class _TravelScreenState extends State<TravelScreen> {
     }
   }
 
-  // ─── LOAD COUNTRIES ───────────────────────────────────────────────────────
   Future<void> _loadCountriesFromSupabase() async {
     setState(() {
       _isLoadingCountries = true;
@@ -323,7 +584,6 @@ class _TravelScreenState extends State<TravelScreen> {
     }
   }
 
-  // ─── MAP ─────────────────────────────────────────────────────────────────
   void _openMap() {
     Navigator.push(
       context,
@@ -353,7 +613,6 @@ class _TravelScreenState extends State<TravelScreen> {
     });
   }
 
-  // ─── DEEP LINK HELPERS ────────────────────────────────────────────────────
   Future<void> _openGoogleFlights() async {
     final from = _selectedOriginState != null
         ? '$_selectedOriginState, ${_selectedOriginCountry?.name ?? ''}'
@@ -383,7 +642,6 @@ class _TravelScreenState extends State<TravelScreen> {
     }
   }
 
-  // ─── CONFIRM & SAVE BOOKING ───────────────────────────────────────────────
   Future<void> _confirmAndSaveBooking() async {
     if (_selectedDestinationCountry == null) {
       _showSnack('Please select a destination first', Colors.orange);
@@ -399,7 +657,6 @@ class _TravelScreenState extends State<TravelScreen> {
     _showSnack('Confirming your booking...', kTeal);
 
     try {
-      // 1 — Save trip and get trip ID
       final origin = _selectedOriginState != null
           ? '$_selectedOriginState, ${_selectedOriginCountry?.name ?? ''}'
           : _selectedOriginCountry?.name ?? '';
@@ -419,7 +676,6 @@ class _TravelScreenState extends State<TravelScreen> {
 
       final tripId = tripResponse['id'];
 
-      // 2 — Save flight booking
       if (_selectedFlight != null) {
         final cabinMultiplier = cabinClasses
             .firstWhere((c) => c['label'] == _cabinClass)['multiplier'] as double;
@@ -446,7 +702,6 @@ class _TravelScreenState extends State<TravelScreen> {
         });
       }
 
-      // 3 — Save hotel booking
       if (_selectedHotel != null) {
         await Supabase.instance.client.from('bookings').insert({
           'user_id': user.id,
@@ -467,7 +722,6 @@ class _TravelScreenState extends State<TravelScreen> {
         });
       }
 
-      // 4 — Save transport booking
       if (_selectedTransport != null) {
         await Supabase.instance.client.from('bookings').insert({
           'user_id': user.id,
@@ -488,8 +742,6 @@ class _TravelScreenState extends State<TravelScreen> {
 
       setState(() => _isBooking = false);
       _showSnack('Booking confirmed! 🎉', kGreen);
-
-      // Reload active booking then go home
       await _loadActiveBooking();
       if (mounted) setState(() => _step = 0);
     } catch (e) {
@@ -498,7 +750,6 @@ class _TravelScreenState extends State<TravelScreen> {
     }
   }
 
-  // ─── HELPERS ─────────────────────────────────────────────────────────────
   void _showSnack(String msg, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -556,13 +807,172 @@ class _TravelScreenState extends State<TravelScreen> {
     return f + h + t;
   }
 
+  // ─── INTERSTATE METHODS ───────────────────────────────────────────────────
+  Future<void> _selectInterstateCountry(CountryModel c) async {
+    setState(() {
+      _selectedInterstateCountry = c;
+      _interstateOriginState = null;
+      _interstateDestState = null;
+      _interstateStates = [];
+      _loadingInterstateStates = true;
+      _interstateStep = 1;
+    });
+    try {
+      final data = await TravelService.fetchStatesForCountry(c.code);
+      setState(() {
+        _interstateStates = data;
+        _loadingInterstateStates = false;
+      });
+    } catch (e) {
+      setState(() {
+        _interstateError = 'Failed to load states';
+        _loadingInterstateStates = false;
+      });
+    }
+  }
+
+  Future<void> _searchInterstateRoutes() async {
+    if (_interstateOriginState == null || _interstateDestState == null) return;
+    setState(() {
+      _loadingInterstateResults = true;
+      _interstateResults = [];
+      _interstateStep = 2;
+    });
+    try {
+      final data = await TravelService.searchRoutes(
+        countryCode: _selectedInterstateCountry!.code,
+        originStateId: _interstateOriginState!.id,
+        destinationStateId: _interstateDestState!.id,
+        transportModeId: _selectedTransportMode?.id,
+      );
+      setState(() {
+        _interstateResults = data;
+        _loadingInterstateResults = false;
+      });
+    } catch (e) {
+      setState(() {
+        _interstateError = 'Search failed: $e';
+        _loadingInterstateResults = false;
+      });
+    }
+  }
+
+  void _resetInterstate() => setState(() {
+        _interstateStep = 0;
+        _selectedInterstateCountry = null;
+        _interstateOriginState = null;
+        _interstateDestState = null;
+        _interstateResults = [];
+        _interstateError = null;
+        _interstateModeFilter = 'all';
+        _selectedTransportMode = null;
+      });
+
   // ─── BUILD ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBackground,
-      body: SafeArea(child: _buildCurrentStep()),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildMainHeader(),
+            _buildTabToggle(),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  _buildFlightsFlow(),
+                  _buildInterstateFlow(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
+  }
+
+  // ─── MAIN HEADER ──────────────────────────────────────────────────────────
+  Widget _buildMainHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+      child: Row(
+        children: [
+          const Text(
+            'My Travel',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: kTextPrimary,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.notifications_outlined, color: kTextPrimary, size: 20),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── TAB TOGGLE ───────────────────────────────────────────────────────────
+  Widget _buildTabToggle() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: TabBar(
+          controller: _tabController,
+          indicator: BoxDecoration(
+            color: kTeal,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          labelColor: Colors.white,
+          unselectedLabelColor: kTextSecondary,
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+          tabs: const [
+            Tab(text: '✈️  Flights'),
+            Tab(text: '🚌  Interstate'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── FLIGHTS FLOW (Your existing, wrapped) ────────────────────────────────
+  Widget _buildFlightsFlow() {
+    return _buildCurrentStep();
   }
 
   Widget _buildCurrentStep() {
@@ -578,7 +988,512 @@ class _TravelScreenState extends State<TravelScreen> {
     }
   }
 
-  // ─── STEP 0: HOME ────────────────────────────────────────────────────────
+  // ─── INTERSTATE FLOW (New) ────────────────────────────────────────────────
+  Widget _buildInterstateFlow() {
+    return Column(
+      children: [
+        _buildInterstateStepBar(),
+        Expanded(
+          child: _interstateError != null
+              ? _buildInterstateError()
+              : _interstateStep == 0
+                  ? _buildInterstateCountryPicker()
+                  : _interstateStep == 1
+                      ? _buildInterstateStatePicker()
+                      : _buildInterstateResults(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInterstateStepBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      child: Row(
+        children: [
+          if (_interstateStep > 0)
+            GestureDetector(
+              onTap: () => setState(() {
+                _interstateStep = _interstateStep - 1;
+                if (_interstateStep == 0) {
+                  _selectedInterstateCountry = null;
+                  _interstateOriginState = null;
+                  _interstateDestState = null;
+                }
+              }),
+              child: Container(
+                margin: const EdgeInsets.only(right: 10),
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: kCard,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4)
+                  ],
+                ),
+                child: const Icon(Icons.arrow_back_ios_new, size: 14, color: kTextPrimary),
+              ),
+            ),
+          Expanded(
+            child: Row(
+              children: List.generate(3, (i) {
+                final active = i <= _interstateStep;
+                return Expanded(
+                  child: Container(
+                    margin: EdgeInsets.only(right: i < 2 ? 6 : 0),
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: active ? kTeal : kTeal.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            ['Country', 'Route', 'Results'][_interstateStep],
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: kTextSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInterstateCountryPicker() {
+    if (_loadingInterstateCountries) {
+      return const Center(child: CircularProgressIndicator(color: kTeal));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(18, 4, 18, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Select Country', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: kTextPrimary)),
+              SizedBox(height: 4),
+              Text('Countries with interstate routes available', style: TextStyle(fontSize: 13, color: kTextSecondary)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            itemCount: _interstateCountries.length,
+            itemBuilder: (ctx, i) {
+              final c = _interstateCountries[i];
+              return _buildInterstateCountryTile(c);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInterstateCountryTile(CountryModel country) {
+    return GestureDetector(
+      onTap: () => _selectInterstateCountry(country),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Text(country.flag ?? '🌍', style: const TextStyle(fontSize: 28)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(country.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: kTextPrimary)),
+                  Text(
+                    '${country.code}${country.currency != null ? ' · ${country.currency}' : ''}',
+                    style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: kTextSecondary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInterstateStatePicker() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Country header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [kTeal, kTealDark]),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Text(_selectedInterstateCountry?.flag ?? '🌍', style: const TextStyle(fontSize: 28)),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _selectedInterstateCountry?.name ?? '',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
+                    ),
+                    Text(
+                      _selectedInterstateCountry?.currency != null ? 'Currency: ${_selectedInterstateCountry!.currency}' : '',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: _resetInterstate,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text('Change', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          if (_loadingInterstateStates)
+            const Center(child: CircularProgressIndicator(color: kTeal))
+          else ...[
+            // Transport mode filter
+            const Text('Transport Mode', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: kTextPrimary)),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _buildModeChip(
+                    label: 'All',
+                    icon: '🔀',
+                    selected: _interstateModeFilter == 'all',
+                    onTap: () => setState(() {
+                      _interstateModeFilter = 'all';
+                      _selectedTransportMode = null;
+                    }),
+                  ),
+                  ..._transportModes.map((m) => _buildModeChip(
+                        label: m.name.split(' ').first,
+                        icon: m.icon,
+                        selected: _interstateModeFilter == m.slug,
+                        onTap: () => setState(() {
+                          _interstateModeFilter = m.slug;
+                          _selectedTransportMode = m;
+                        }),
+                      )),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Origin state
+            const Text('From (Origin State)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: kTextPrimary)),
+            const SizedBox(height: 10),
+            _buildStateDropdown(
+              hint: 'Select origin state',
+              states: _interstateStates,
+              selected: _interstateOriginState,
+              excluded: _interstateDestState,
+              onChanged: (s) => setState(() => _interstateOriginState = s),
+            ),
+            const SizedBox(height: 16),
+
+            // Swap icon
+            Center(
+              child: GestureDetector(
+                onTap: () => setState(() {
+                  final tmp = _interstateOriginState;
+                  _interstateOriginState = _interstateDestState;
+                  _interstateDestState = tmp;
+                }),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kTealLight,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: kTeal.withOpacity(0.4)),
+                  ),
+                  child: const Icon(Icons.swap_vert, color: kTeal, size: 20),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Destination state
+            const Text('To (Destination State)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: kTextPrimary)),
+            const SizedBox(height: 10),
+            _buildStateDropdown(
+              hint: 'Select destination state',
+              states: _interstateStates,
+              selected: _interstateDestState,
+              excluded: _interstateOriginState,
+              onChanged: (s) => setState(() => _interstateDestState = s),
+            ),
+            const SizedBox(height: 28),
+
+            // Search button
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: (_interstateOriginState != null && _interstateDestState != null) ? _searchInterstateRoutes : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kTeal,
+                  disabledBackgroundColor: kTeal.withOpacity(0.4),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  '🔍  Search Routes',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeChip({
+    required String label,
+    required String icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? kTeal : kCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? kTeal : Colors.grey.withOpacity(0.2)),
+          boxShadow: selected
+              ? [BoxShadow(color: kTeal.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
+              : [],
+        ),
+        child: Row(
+          children: [
+            Text(icon, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: selected ? Colors.white : kTextPrimary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStateDropdown({
+    required String hint,
+    required List<StateModel> states,
+    required StateModel? selected,
+    required StateModel? excluded,
+    required ValueChanged<StateModel?> onChanged,
+  }) {
+    final available = states.where((s) => s.id != excluded?.id).toList();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: selected != null ? kTeal : Colors.grey.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
+        ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<StateModel>(
+          value: selected,
+          isExpanded: true,
+          hint: Text(hint, style: const TextStyle(color: kTextSecondary, fontSize: 14)),
+          icon: const Icon(Icons.keyboard_arrow_down, color: kTeal),
+          items: available
+              .map((s) => DropdownMenuItem(
+                    value: s,
+                    child: Text(s.name, style: const TextStyle(fontSize: 14, color: kTextPrimary)),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInterstateResults() {
+    if (_loadingInterstateResults) {
+      return const Center(child: CircularProgressIndicator(color: kTeal));
+    }
+
+    final filtered = _interstateModeFilter == 'all'
+        ? _interstateResults
+        : _interstateResults.where((r) => r.modeSlug == _interstateModeFilter).toList();
+
+    return Column(
+      children: [
+        // Search summary bar
+        Container(
+          margin: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: kTealLight,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: kTeal.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_interstateOriginState?.name} → ${_interstateDestState?.name}',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: kTextPrimary),
+                    ),
+                    Text(
+                      '${_selectedInterstateCountry?.flag ?? ''} ${_selectedInterstateCountry?.name ?? ''} · ${_interstateResults.length} route${_interstateResults.length != 1 ? 's' : ''} found',
+                      style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _interstateStep = 1),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: kTeal, borderRadius: BorderRadius.circular(8)),
+                  child: const Text('Edit', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Mode filter chips
+        if (_transportModes.isNotEmpty)
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              children: [
+                _buildModeChip(
+                  label: 'All',
+                  icon: '🔀',
+                  selected: _interstateModeFilter == 'all',
+                  onTap: () => setState(() => _interstateModeFilter = 'all'),
+                ),
+                ..._transportModes.map((m) => _buildModeChip(
+                      label: m.name.split(' ').first,
+                      icon: m.icon,
+                      selected: _interstateModeFilter == m.slug,
+                      onTap: () => setState(() => _interstateModeFilter = m.slug),
+                    )),
+              ],
+            ),
+          ),
+        const SizedBox(height: 12),
+
+        // Results list
+        Expanded(
+          child: filtered.isEmpty
+              ? _buildNoInterstateResults()
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  itemCount: filtered.length,
+                  itemBuilder: (ctx, i) => _InterstateRouteCard(
+                    route: filtered[i],
+                    currency: _selectedInterstateCountry?.currency,
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoInterstateResults() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('🚌', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 16),
+          const Text('No routes found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: kTextPrimary)),
+          const SizedBox(height: 8),
+          const Text(
+            'Try a different origin/destination\nor transport mode',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: kTextSecondary),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () => setState(() => _interstateStep = 1),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kTeal,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Change Route', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInterstateError() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('⚠️', style: TextStyle(fontSize: 40)),
+          const SizedBox(height: 12),
+          Text(_interstateError ?? 'Something went wrong', style: const TextStyle(color: kTextPrimary)),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () {
+              setState(() => _interstateError = null);
+              _loadInterstateData();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: kTeal),
+            child: const Text('Retry', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── YOUR EXISTING WIDGET METHODS (unchanged) ─────────────────────────────
   Widget _buildHomeStep() {
     return Column(
       children: [
@@ -587,7 +1502,6 @@ class _TravelScreenState extends State<TravelScreen> {
           child: ListView(
             padding: const EdgeInsets.all(18),
             children: [
-              // Active trip card — only shows when there's a confirmed booking
               if (_isLoadingActiveBooking)
                 const Center(child: CircularProgressIndicator())
               else if (_activeBooking != null)
@@ -637,16 +1551,13 @@ class _TravelScreenState extends State<TravelScreen> {
               if (_isLoadingCountries)
                 const Center(child: CircularProgressIndicator())
               else if (_countriesError.isNotEmpty)
-                Center(child: Text('Error: $_countriesError',
-                    style: const TextStyle(color: Colors.red)))
+                Center(child: Text('Error: $_countriesError', style: const TextStyle(color: Colors.red)))
               else
                 SizedBox(
                   height: 100,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
-                    children: _allCountries.take(10)
-                        .map((c) => _destinationChip(c))
-                        .toList(),
+                    children: _allCountries.take(10).map((c) => _destinationChip(c)).toList(),
                   ),
                 ),
             ],
@@ -656,7 +1567,6 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  // ─── ACTIVE TRIP CARD (real data) ─────────────────────────────────────────
   Widget _buildActiveTripCard() {
     final b = _activeBooking!;
     final depStr = b.departureDate != null
@@ -669,7 +1579,7 @@ class _TravelScreenState extends State<TravelScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0EADBB), Color(0xFF0A8A96)],
+          colors: [kTeal, kTealDark],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -683,18 +1593,14 @@ class _TravelScreenState extends State<TravelScreen> {
             children: [
               const Text('✈️', style: TextStyle(fontSize: 20)),
               const SizedBox(width: 8),
-              const Text('Active Trip',
-                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const Text('Active Trip', style: TextStyle(color: Colors.white70, fontSize: 13)),
               const Spacer(),
               GestureDetector(
                 onTap: _openMap,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(20)),
-                  child: const Text('View Map',
-                      style: TextStyle(color: Colors.white, fontSize: 12)),
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
+                  child: const Text('View Map', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
               ),
             ],
@@ -702,12 +1608,10 @@ class _TravelScreenState extends State<TravelScreen> {
           const SizedBox(height: 8),
           Text(
             '${b.origin} → ${b.destination}',
-            style: const TextStyle(
-                color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
           ),
           if (depStr.isNotEmpty)
-            Text('$depStr${retStr.isNotEmpty ? ' – $retStr' : ''}',
-                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            Text('$depStr${retStr.isNotEmpty ? ' – $retStr' : ''}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -728,7 +1632,6 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  // ─── NO ACTIVE TRIP CARD ──────────────────────────────────────────────────
   Widget _buildNoActiveTripCard() {
     return GestureDetector(
       onTap: () => setState(() {
@@ -739,7 +1642,7 @@ class _TravelScreenState extends State<TravelScreen> {
       child: Container(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF0EADBB), Color(0xFF0A8A96)],
+            colors: [kTeal, kTealDark],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -753,17 +1656,13 @@ class _TravelScreenState extends State<TravelScreen> {
               children: [
                 Text('✈️', style: TextStyle(fontSize: 20)),
                 SizedBox(width: 8),
-                Text('No Active Trip',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                Text('No Active Trip', style: TextStyle(color: Colors.white70, fontSize: 13)),
               ],
             ),
             SizedBox(height: 8),
             Text(
               'Book your first trip!',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600),
+              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
             ),
             SizedBox(height: 4),
             Text(
@@ -779,18 +1678,12 @@ class _TravelScreenState extends State<TravelScreen> {
   Widget _tripStat(String icon, String title, String sub) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-          color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
       child: Column(
         children: [
           Text(icon, style: const TextStyle(fontSize: 14)),
-          Text(title,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500)),
-          Text(sub,
-              style: const TextStyle(color: Colors.white70, fontSize: 9)),
+          Text(title, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500)),
+          Text(sub, style: const TextStyle(color: Colors.white70, fontSize: 9)),
         ],
       ),
     );
@@ -811,11 +1704,7 @@ class _TravelScreenState extends State<TravelScreen> {
             children: [
               Text('✦', style: TextStyle(color: kTeal, fontSize: 16)),
               SizedBox(width: 6),
-              Text('AI Travel Tips',
-                  style: TextStyle(
-                      color: kTeal,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
+              Text('AI Travel Tips', style: TextStyle(color: kTeal, fontSize: 13, fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 10),
@@ -835,10 +1724,7 @@ class _TravelScreenState extends State<TravelScreen> {
         children: [
           Text(icon, style: const TextStyle(fontSize: 14)),
           const SizedBox(width: 8),
-          Expanded(
-              child: Text(text,
-                  style:
-                      const TextStyle(fontSize: 12, color: kTextPrimary))),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 12, color: kTextPrimary))),
         ],
       ),
     );
@@ -858,11 +1744,7 @@ class _TravelScreenState extends State<TravelScreen> {
           children: [
             Text(icon, style: const TextStyle(fontSize: 20)),
             const SizedBox(width: 8),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: kTextPrimary)),
+            Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: kTextPrimary)),
           ],
         ),
       ),
@@ -891,22 +1773,17 @@ class _TravelScreenState extends State<TravelScreen> {
             Text(c.flag, style: const TextStyle(fontSize: 28)),
             const SizedBox(height: 4),
             Text(c.name,
-                style: const TextStyle(
-                    fontSize: 11,
-                    color: kTextPrimary,
-                    fontWeight: FontWeight.w500),
+                style: const TextStyle(fontSize: 11, color: kTextPrimary, fontWeight: FontWeight.w500),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
-            Text(c.currency,
-                style: const TextStyle(fontSize: 10, color: kTextSecondary)),
+            Text(c.currency, style: const TextStyle(fontSize: 10, color: kTextSecondary)),
           ],
         ),
       ),
     );
   }
 
-  // ─── STEP 1: COUNTRY PICKER ───────────────────────────────────────────────
   Widget _buildCountryPickerStep() {
     final filtered = _allCountries
         .where((c) =>
@@ -922,9 +1799,7 @@ class _TravelScreenState extends State<TravelScreen> {
     return Column(
       children: [
         _buildHeader(
-          _isSelectingOrigin
-              ? 'Resident Country (Origin)'
-              : 'Destination Country',
+          _isSelectingOrigin ? 'Resident Country (Origin)' : 'Destination Country',
           showBack: true,
           onBack: () => setState(() => _step = 0),
         ),
@@ -936,22 +1811,17 @@ class _TravelScreenState extends State<TravelScreen> {
             style: const TextStyle(fontSize: 14, color: kTextPrimary),
             decoration: InputDecoration(
               hintText: 'Search country or continent...',
-              hintStyle:
-                  const TextStyle(fontSize: 13, color: kTextSecondary),
-              prefixIcon:
-                  const Icon(Icons.search, color: kTextSecondary, size: 20),
+              hintStyle: const TextStyle(fontSize: 13, color: kTextSecondary),
+              prefixIcon: const Icon(Icons.search, color: kTextSecondary, size: 20),
               filled: true,
               fillColor: kCard,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(22),
-                  borderSide: const BorderSide(
-                      color: Color(0xFFDDE4E8), width: 0.5)),
+                  borderSide: const BorderSide(color: Color(0xFFDDE4E8), width: 0.5)),
               enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(22),
-                  borderSide: const BorderSide(
-                      color: Color(0xFFDDE4E8), width: 0.5)),
+                  borderSide: const BorderSide(color: Color(0xFFDDE4E8), width: 0.5)),
               focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(22),
                   borderSide: const BorderSide(color: kTeal, width: 1)),
@@ -961,14 +1831,9 @@ class _TravelScreenState extends State<TravelScreen> {
         if (_isLoadingCountries)
           const Expanded(child: Center(child: CircularProgressIndicator()))
         else if (_countriesError.isNotEmpty)
-          Expanded(
-              child: Center(
-                  child: Text('Error: $_countriesError',
-                      style: const TextStyle(color: Colors.red))))
+          Expanded(child: Center(child: Text('Error: $_countriesError', style: const TextStyle(color: Colors.red))))
         else if (_allCountries.isEmpty)
-          const Expanded(
-              child: Center(
-                  child: Text('No countries found.')))
+          const Expanded(child: Center(child: Text('No countries found.')))
         else
           Expanded(
             child: ListView(
@@ -1000,8 +1865,7 @@ class _TravelScreenState extends State<TravelScreen> {
   Widget _countryRow(CountryDestination c) {
     final isOriginSelected = _selectedOriginCountry?.code == c.code;
     final isDestinationSelected = _selectedDestinationCountry?.code == c.code;
-    final selected =
-        _isSelectingOrigin ? isOriginSelected : isDestinationSelected;
+    final selected = _isSelectingOrigin ? isOriginSelected : isDestinationSelected;
 
     return GestureDetector(
       onTap: () {
@@ -1009,11 +1873,9 @@ class _TravelScreenState extends State<TravelScreen> {
           if (_isSelectingOrigin) {
             _selectedOriginCountry = c;
             _selectedOriginState = null;
-            // If country has states, go to state picker
             if (c.states.isNotEmpty) {
               _isSelectingState = true;
             } else {
-              // Check if destination needs to be selected first
               if (_selectedDestinationCountry == null) {
                 _isSelectingOrigin = false;
                 _step = 1;
@@ -1048,35 +1910,27 @@ class _TravelScreenState extends State<TravelScreen> {
                 children: [
                   Text(c.name,
                       style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: kTextPrimary)),
+                          fontSize: 14, fontWeight: FontWeight.w500, color: kTextPrimary)),
                   Text('${c.continent} · ${c.currency}',
-                      style: const TextStyle(
-                          fontSize: 12, color: kTextSecondary)),
+                      style: const TextStyle(fontSize: 12, color: kTextSecondary)),
                 ],
               ),
             ),
             if (c.states.isNotEmpty && _isSelectingOrigin)
-              const Text('Has states →',
-                  style: TextStyle(fontSize: 10, color: kTeal)),
+              const Text('Has states →', style: TextStyle(fontSize: 10, color: kTeal)),
             if (selected)
               const Icon(Icons.check_circle, color: kTeal, size: 20)
             else
-              const Icon(Icons.arrow_forward_ios,
-                  color: kTextSecondary, size: 14),
+              const Icon(Icons.arrow_forward_ios, color: kTextSecondary, size: 14),
           ],
         ),
       ),
     );
   }
 
-  // ─── STATE PICKER ─────────────────────────────────────────────────────────
   Widget _buildStatePickerStep() {
     final states = _selectedOriginCountry?.states ?? [];
-    final filtered = states
-        .where((s) => s.toLowerCase().contains(_countrySearch.toLowerCase()))
-        .toList();
+    final filtered = states.where((s) => s.toLowerCase().contains(_countrySearch.toLowerCase())).toList();
 
     return Column(
       children: [
@@ -1095,36 +1949,29 @@ class _TravelScreenState extends State<TravelScreen> {
             style: const TextStyle(fontSize: 14, color: kTextPrimary),
             decoration: InputDecoration(
               hintText: 'Search state...',
-              hintStyle:
-                  const TextStyle(fontSize: 13, color: kTextSecondary),
-              prefixIcon:
-                  const Icon(Icons.search, color: kTextSecondary, size: 20),
+              hintStyle: const TextStyle(fontSize: 13, color: kTextSecondary),
+              prefixIcon: const Icon(Icons.search, color: kTextSecondary, size: 20),
               filled: true,
               fillColor: kCard,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(22),
-                  borderSide: const BorderSide(
-                      color: Color(0xFFDDE4E8), width: 0.5)),
+                  borderSide: const BorderSide(color: Color(0xFFDDE4E8), width: 0.5)),
               enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(22),
-                  borderSide: const BorderSide(
-                      color: Color(0xFFDDE4E8), width: 0.5)),
+                  borderSide: const BorderSide(color: Color(0xFFDDE4E8), width: 0.5)),
               focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(22),
                   borderSide: const BorderSide(color: kTeal, width: 1)),
             ),
           ),
         ),
-        // Skip state option
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
           child: GestureDetector(
             onTap: () => setState(() {
               _selectedOriginState = null;
               _isSelectingState = false;
-              // After origin selected, check if destination needed
               if (_selectedDestinationCountry == null) {
                 _isSelectingOrigin = false;
                 _step = 1;
@@ -1139,16 +1986,13 @@ class _TravelScreenState extends State<TravelScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: kTeal, width: 0.5),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('🌍', style: TextStyle(fontSize: 16)),
-                  SizedBox(width: 8),
-                  Text('Skip — Search all of ${''} flights',
-                      style: TextStyle(
-                          color: kTeal,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500)),
+                  const Text('🌍', style: TextStyle(fontSize: 16)),
+                  const SizedBox(width: 8),
+                  Text('Skip — Search all of ${_selectedOriginCountry?.name ?? ''} flights',
+                      style: const TextStyle(color: kTeal, fontSize: 13, fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
@@ -1160,13 +2004,11 @@ class _TravelScreenState extends State<TravelScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('No states available for this country.',
-                          style: TextStyle(color: kTextSecondary)),
+                      const Text('No states available for this country.', style: TextStyle(color: kTextSecondary)),
                       const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: () => setState(() {
                           _isSelectingState = false;
-                          // After origin selected, check if destination needed
                           if (_selectedDestinationCountry == null) {
                             _isSelectingOrigin = false;
                             _step = 1;
@@ -1174,10 +2016,8 @@ class _TravelScreenState extends State<TravelScreen> {
                             _step = 2;
                           }
                         }),
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: kTeal),
-                        child: const Text('Continue anyway',
-                            style: TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(backgroundColor: kTeal),
+                        child: const Text('Continue anyway', style: TextStyle(color: Colors.white)),
                       ),
                     ],
                   ),
@@ -1192,7 +2032,6 @@ class _TravelScreenState extends State<TravelScreen> {
                       onTap: () => setState(() {
                         _selectedOriginState = state;
                         _isSelectingState = false;
-                        // After origin selected, check if destination needed
                         if (_selectedDestinationCountry == null) {
                           _isSelectingOrigin = false;
                           _step = 1;
@@ -1203,35 +2042,27 @@ class _TravelScreenState extends State<TravelScreen> {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                         decoration: BoxDecoration(
                           color: isSelected ? kTealLight : kCard,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                              color: isSelected
-                                  ? kTeal
-                                  : const Color(0xFFDDE4E8),
+                              color: isSelected ? kTeal : const Color(0xFFDDE4E8),
                               width: isSelected ? 1 : 0.5),
                         ),
                         child: Row(
                           children: [
-                            const Text('📍',
-                                style: TextStyle(fontSize: 20)),
+                            const Text('📍', style: TextStyle(fontSize: 20)),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(state,
                                   style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: kTextPrimary)),
+                                      fontSize: 14, fontWeight: FontWeight.w500, color: kTextPrimary)),
                             ),
                             if (isSelected)
-                              const Icon(Icons.check_circle,
-                                  color: kTeal, size: 20)
+                              const Icon(Icons.check_circle, color: kTeal, size: 20)
                             else
-                              const Icon(Icons.arrow_forward_ios,
-                                  color: kTextSecondary, size: 14),
+                              const Icon(Icons.arrow_forward_ios, color: kTextSecondary, size: 14),
                           ],
                         ),
                       ),
@@ -1243,7 +2074,6 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  // ─── STEP 2: FLIGHTS ──────────────────────────────────────────────────────
   Widget _buildFlightsStep() {
     if (_selectedOriginCountry == null || _selectedDestinationCountry == null) {
       return Center(
@@ -1373,7 +2203,6 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  // Add this method to search real flights
   Future<List<Map<String, dynamic>>> _searchRealFlights() async {
     final flightService = FlightService();
     final date = _departureDate ?? DateTime.now().add(const Duration(days: 7));
@@ -1386,7 +2215,6 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  // Add this method to display real flight cards
   Widget _buildRealFlightCard(Map<String, dynamic> f, String originLabel) {
     final isSelected = _selectedFlight?.flightNo == f['flightNo'];
     final cabinMultiplier = cabinClasses
@@ -1530,8 +2358,7 @@ class _TravelScreenState extends State<TravelScreen> {
               ),
               child: Row(
                 children: [
-                  Text(c['icon'],
-                      style: const TextStyle(fontSize: 14)),
+                  Text(c['icon'], style: const TextStyle(fontSize: 14)),
                   const SizedBox(width: 6),
                   Text(c['label'],
                       style: TextStyle(
@@ -1564,13 +2391,10 @@ class _TravelScreenState extends State<TravelScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('From',
-                      style:
-                          TextStyle(fontSize: 10, color: kTextSecondary)),
+                  const Text('From', style: TextStyle(fontSize: 10, color: kTextSecondary)),
                   Row(
                     children: [
-                      Text(_selectedOriginCountry?.flag ?? '🌍',
-                          style: const TextStyle(fontSize: 16)),
+                      Text(_selectedOriginCountry?.flag ?? '🌍', style: const TextStyle(fontSize: 16)),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -1582,8 +2406,7 @@ class _TravelScreenState extends State<TravelScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Icon(Icons.arrow_drop_down,
-                          color: kTeal, size: 20),
+                      const Icon(Icons.arrow_drop_down, color: kTeal, size: 20),
                     ],
                   ),
                 ],
@@ -1595,8 +2418,7 @@ class _TravelScreenState extends State<TravelScreen> {
             height: 36,
             decoration: const BoxDecoration(
                 color: kTealLight, shape: BoxShape.circle),
-            child:
-                const Icon(Icons.swap_horiz, color: kTeal, size: 20),
+            child: const Icon(Icons.swap_horiz, color: kTeal, size: 20),
           ),
           Expanded(
             child: GestureDetector(
@@ -1604,19 +2426,15 @@ class _TravelScreenState extends State<TravelScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text('To',
-                      style:
-                          TextStyle(fontSize: 10, color: kTextSecondary)),
+                  const Text('To', style: TextStyle(fontSize: 10, color: kTextSecondary)),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text(_selectedDestinationCountry?.flag ?? '🌍',
-                          style: const TextStyle(fontSize: 16)),
+                      Text(_selectedDestinationCountry?.flag ?? '🌍', style: const TextStyle(fontSize: 16)),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          _selectedDestinationCountry?.name ??
-                              'Select Destination',
+                          _selectedDestinationCountry?.name ?? 'Select Destination',
                           style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -1625,8 +2443,7 @@ class _TravelScreenState extends State<TravelScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Icon(Icons.arrow_drop_down,
-                          color: kTeal, size: 20),
+                      const Icon(Icons.arrow_drop_down, color: kTeal, size: 20),
                     ],
                   ),
                 ],
@@ -1638,10 +2455,8 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  // ─── STEP 3: HOTELS ───────────────────────────────────────────────────────
   Widget _buildHotelsStep() {
-    final hotels =
-        getHotels(_selectedDestinationCountry?.name ?? '');
+    final hotels = getHotels(_selectedDestinationCountry?.name ?? '');
     final filtered = _hotelFilter == 'all'
         ? hotels
         : hotels.where((h) => h.tier == _hotelFilter).toList();
@@ -1718,8 +2533,7 @@ class _TravelScreenState extends State<TravelScreen> {
           ),
         ),
         if (_selectedFlight != null)
-          _buildBottomBar('Continue to Transport',
-              () => setState(() => _step = 4)),
+          _buildBottomBar('Continue to Transport', () => setState(() => _step = 4)),
       ],
     );
   }
@@ -1863,10 +2677,8 @@ class _TravelScreenState extends State<TravelScreen> {
                 color: kAmber, size: 14)));
   }
 
-  // ─── STEP 4: TRANSPORT ────────────────────────────────────────────────────
   Widget _buildTransportStep() {
-    final transport =
-        getTransport(_selectedDestinationCountry?.name ?? '');
+    final transport = getTransport(_selectedDestinationCountry?.name ?? '');
     return Column(
       children: [
         _buildHeader(
@@ -1984,7 +2796,6 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  // ─── STEP 5: MAP ──────────────────────────────────────────────────────────
   Widget _buildMapStep() {
     return Column(
       children: [
@@ -2245,7 +3056,6 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  // ─── STEP 6: CONFIRM ──────────────────────────────────────────────────────
   Widget _buildConfirmStep() {
     final originLabel = _selectedOriginState != null
         ? '$_selectedOriginState, ${_selectedOriginCountry?.name ?? ''}'
@@ -2260,12 +3070,11 @@ class _TravelScreenState extends State<TravelScreen> {
           child: ListView(
             padding: const EdgeInsets.all(18),
             children: [
-              // Trip summary banner
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                      colors: [Color(0xFF0EADBB), Color(0xFF0A8A96)]),
+                      colors: [kTeal, kTealDark]),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
@@ -2344,8 +3153,6 @@ class _TravelScreenState extends State<TravelScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // ─── CONFIRM & SAVE TO SUPABASE ───
               GestureDetector(
                 onTap: _isBooking ? null : _confirmAndSaveBooking,
                 child: Container(
@@ -2756,18 +3563,6 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  Widget _sectionLabel(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8, top: 4),
-      child: Text(title,
-          style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: kTextSecondary,
-              letterSpacing: 0.4)),
-    );
-  }
-
   Widget _badge(String text, Color bg, Color fg) {
     return Container(
       padding:
@@ -2816,6 +3611,296 @@ class _TravelScreenState extends State<TravelScreen> {
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: active ? Colors.white : kTextSecondary)),
+      ),
+    );
+  }
+}
+
+// ─── INTERSTATE ROUTE CARD WIDGET ───────────────────────────────────────────
+class _InterstateRouteCard extends StatefulWidget {
+  final InterstateRoute route;
+  final String? currency;
+
+  const _InterstateRouteCard({required this.route, this.currency});
+
+  @override
+  State<_InterstateRouteCard> createState() => _InterstateRouteCardState();
+}
+
+class _InterstateRouteCardState extends State<_InterstateRouteCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.route;
+    final priceText = r.priceMin != null
+        ? '${r.currency} ${r.priceMin!.toStringAsFixed(0)}${r.priceMax != null ? ' – ${r.priceMax!.toStringAsFixed(0)}' : ''}'
+        : 'Price on request';
+
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: _expanded
+                  ? kTeal
+                  : Colors.transparent),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  // Top row: mode icon + operator + price
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: kTealLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(r.modeIcon,
+                              style: const TextStyle(fontSize: 20)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(r.operator,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: kTextPrimary)),
+                            Row(
+                              children: [
+                                Text(r.transportMode,
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        color: kTextSecondary)),
+                                if (r.operatorRating != null) ...[
+                                  const Text(' · ',
+                                      style: TextStyle(
+                                          color: kTextSecondary,
+                                          fontSize: 11)),
+                                  const Icon(Icons.star,
+                                      size: 11,
+                                      color: Color(0xFFFFC107)),
+                                  Text(
+                                      r.operatorRating!
+                                          .toStringAsFixed(1),
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: kTextSecondary)),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(priceText,
+                              style: const TextStyle(
+                                  color: kTeal,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13)),
+                          if (r.durationMinutes != null)
+                            Text(r.durationText,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: kTextSecondary)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Route line
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(r.originCity,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: kTextPrimary)),
+                            Text(r.originTerminal,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: kTextSecondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        children: [
+                          Text(r.modeIcon,
+                              style: const TextStyle(fontSize: 16)),
+                          if (r.distanceKm != null)
+                            Text(
+                                '${r.distanceKm!.toStringAsFixed(0)} km',
+                                style: const TextStyle(
+                                    fontSize: 9,
+                                    color: kTextSecondary)),
+                        ],
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(r.destinationCity,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: kTextPrimary)),
+                            Text(r.destinationTerminal,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: kTextSecondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Expanded details
+            if (_expanded)
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: Column(
+                  children: [
+                    const Divider(height: 16),
+                    _DetailRow('Terminal (From)', r.originTerminal),
+                    _DetailRow('Terminal (To)', r.destinationTerminal),
+                    if (r.distanceKm != null)
+                      _DetailRow('Distance',
+                          '${r.distanceKm!.toStringAsFixed(0)} km'),
+                    if (r.durationMinutes != null)
+                      _DetailRow('Duration', r.durationText),
+                    _DetailRow('Price Range', priceText),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Booking ${r.operator} — coming soon!'),
+                              backgroundColor: kTeal,
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kTeal,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(12)),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          'Book with ${r.operator}',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    if (r.operatorWebsite != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: OutlinedButton(
+                          onPressed: () {},
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: kTeal),
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(12)),
+                            minimumSize:
+                                const Size(double.infinity, 44),
+                          ),
+                          child: const Text(
+                            '🌐  Visit Operator Website',
+                            style: TextStyle(
+                                color: kTeal,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+            // Expand toggle
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: kTextSecondary,
+                  size: 20,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 12, color: kTextSecondary)),
+          const Spacer(),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: kTextPrimary)),
+        ],
       ),
     );
   }
