@@ -1,3 +1,4 @@
+import 'flight_service.dart';
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -425,7 +426,7 @@ class _TravelScreenState extends State<TravelScreen> {
         await Supabase.instance.client.from('bookings').insert({
           'user_id': user.id,
           'trip_id': tripId,
-          'type': 'flight',
+          'type': 'Flight',
           'provider': _selectedFlight!.airline,
           'confirmation_code': _selectedFlight!.flightNo,
           'booking_url': 'https://www.google.com/travel/flights',
@@ -450,7 +451,7 @@ class _TravelScreenState extends State<TravelScreen> {
         await Supabase.instance.client.from('bookings').insert({
           'user_id': user.id,
           'trip_id': tripId,
-          'type': 'hotel',
+          'type': 'Hotel',
           'provider': _selectedHotel!.name,
           'confirmation_code': 'HTL-${DateTime.now().millisecondsSinceEpoch}',
           'booking_url': 'https://www.booking.com',
@@ -471,7 +472,7 @@ class _TravelScreenState extends State<TravelScreen> {
         await Supabase.instance.client.from('bookings').insert({
           'user_id': user.id,
           'trip_id': tripId,
-          'type': 'transport',
+          'type': 'Transport',
           'provider': _selectedTransport!.provider,
           'confirmation_code': 'TRN-${DateTime.now().millisecondsSinceEpoch}',
           'booking_url': '',
@@ -1258,25 +1259,11 @@ class _TravelScreenState extends State<TravelScreen> {
                 _step = 1;
               }),
               style: ElevatedButton.styleFrom(backgroundColor: kTeal),
-              child: const Text('Select Locations',
-                  style: TextStyle(color: Colors.white)),
+              child: const Text('Select Locations', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
       );
-    }
-
-    final flights = getFlights(
-        _selectedOriginCountry!.name, _selectedDestinationCountry!.name);
-    List<FlightOption> filtered;
-    if (_flightFilter == 'cheap') {
-      filtered = List.from(flights)
-        ..sort((a, b) => a.price.compareTo(b.price));
-    } else if (_flightFilter == 'luxury') {
-      filtered = List.from(flights)
-        ..sort((a, b) => b.price.compareTo(a.price));
-    } else {
-      filtered = flights;
     }
 
     final originLabel = _selectedOriginState != null
@@ -1285,11 +1272,8 @@ class _TravelScreenState extends State<TravelScreen> {
 
     return Column(
       children: [
-        _buildHeader('Flights',
-            showBack: true,
-            onBack: () => setState(() => _step = 0)),
+        _buildHeader('Flights', showBack: true, onBack: () => setState(() => _step = 0)),
         _buildRouteBar(originLabel),
-        // Cabin class selector
         _buildCabinClassSelector(),
         _buildFilterRow(
           options: const ['all', 'cheap', 'luxury'],
@@ -1298,45 +1282,228 @@ class _TravelScreenState extends State<TravelScreen> {
           onSelect: (v) => setState(() => _flightFilter = v),
         ),
         _aiSuggestionBanner(
-          '✦ AI Pick: Turkish Airlines TK626 at \$390 — best value for $originLabel → ${_selectedDestinationCountry!.name}',
+          '✦ Searching real flights from ${_selectedOriginCountry?.name ?? "origin"} → ${_selectedDestinationCountry?.name ?? "destination"}',
         ),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 20),
-            children: [
-              ...filtered.map((f) => _buildFlightCard(f, originLabel)),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: _openGoogleFlights,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: kTealLight,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: kTeal, width: 0.5),
-                  ),
-                  child: const Row(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: _searchRealFlights(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              
+              if (snapshot.hasError) {
+                return Center(
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('✈️', style: TextStyle(fontSize: 18)),
-                      SizedBox(width: 8),
-                      Text('Search Real Flights on Google →',
-                          style: TextStyle(
-                              color: kTeal,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13)),
+                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text('Error: ${snapshot.error}'),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => setState(() {}),
+                        child: const Text('Retry'),
+                      ),
                     ],
                   ),
-                ),
-              ),
-            ],
+                );
+              }
+              
+              final flights = snapshot.data ?? [];
+              List<Map<String, dynamic>> filtered;
+              
+              if (_flightFilter == 'cheap') {
+                filtered = List.from(flights)..sort((a, b) => a['price'].compareTo(b['price']));
+              } else if (_flightFilter == 'luxury') {
+                filtered = List.from(flights)..sort((a, b) => b['price'].compareTo(a['price']));
+              } else {
+                filtered = flights;
+              }
+              
+              if (flights.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.flight_land, size: 48, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text('No flights found for this route'),
+                      SizedBox(height: 8),
+                      Text('Try different dates or destinations', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                );
+              }
+              
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 20),
+                children: [
+                  ...filtered.map((f) => _buildRealFlightCard(f, originLabel)),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: _openGoogleFlights,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: kTealLight,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: kTeal, width: 0.5),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('✈️', style: TextStyle(fontSize: 18)),
+                          SizedBox(width: 8),
+                          Text('Search More Flights on Google →',
+                              style: TextStyle(color: kTeal, fontWeight: FontWeight.w600, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
         if (_selectedFlight != null)
-          _buildBottomBar(
-              'Continue to Hotels', () => setState(() => _step = 3)),
+          _buildBottomBar('Continue to Hotels', () => setState(() => _step = 3)),
       ],
+    );
+  }
+
+  // Add this method to search real flights
+  Future<List<Map<String, dynamic>>> _searchRealFlights() async {
+    final flightService = FlightService();
+    final date = _departureDate ?? DateTime.now().add(const Duration(days: 7));
+    final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    
+    return await flightService.searchFlights(
+      fromCity: _selectedOriginCountry!.name,
+      toCity: _selectedDestinationCountry!.name,
+      date: dateStr,
+    );
+  }
+
+  // Add this method to display real flight cards
+  Widget _buildRealFlightCard(Map<String, dynamic> f, String originLabel) {
+    final isSelected = _selectedFlight?.flightNo == f['flightNo'];
+    final cabinMultiplier = cabinClasses
+        .firstWhere((c) => c['label'] == _cabinClass)['multiplier'] as double;
+    final totalPrice = (f['price'] as double) * cabinMultiplier * _passengers;
+    
+    final flightOption = FlightOption(
+      airline: f['airline'],
+      flightNo: f['flightNo'],
+      departure: f['departure'],
+      arrival: f['arrival'],
+      duration: f['duration'],
+      price: f['price'],
+      type: f['type'],
+      stops: f['stops'],
+    );
+
+    return GestureDetector(
+      onTap: () => setState(() => _selectedFlight = flightOption),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? kTealLight : kCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: isSelected ? kTeal : const Color(0xFFDDE4E8),
+              width: isSelected ? 1.5 : 0.5),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                      color: kBackground,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Center(child: Text('✈️', style: TextStyle(fontSize: 18))),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(f['airline'],
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kTextPrimary)),
+                      Text('${f['flightNo']} · $_cabinClass',
+                          style: const TextStyle(fontSize: 11, color: kTextSecondary)),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(_formatPrice(totalPrice),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kTeal)),
+                    Text('$_passengers pax · $_cabinClass',
+                        style: const TextStyle(fontSize: 10, color: kTextSecondary)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(f['departure'],
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                  Text(originLabel,
+                      style: const TextStyle(fontSize: 10, color: kTextSecondary)),
+                ]),
+                Expanded(
+                  child: Column(children: [
+                    Text(f['duration'],
+                        style: const TextStyle(fontSize: 10, color: kTextSecondary)),
+                    Row(children: [
+                      Expanded(child: Container(height: 1, color: const Color(0xFFDDE4E8))),
+                      const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: Text('✈️', style: TextStyle(fontSize: 12))),
+                      Expanded(child: Container(height: 1, color: const Color(0xFFDDE4E8))),
+                    ]),
+                    Text(f['stops'] == 0 ? 'Non-stop' : '${f['stops']} stop',
+                        style: const TextStyle(fontSize: 10, color: kTextSecondary)),
+                  ]),
+                ),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text(f['arrival'],
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                  Text(_selectedDestinationCountry?.name ?? '',
+                      style: const TextStyle(fontSize: 10, color: kTextSecondary)),
+                ]),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _badge(_tierLabel(f['type']), _tierBg(f['type']), _tierColor(f['type'])),
+                const Spacer(),
+                if (isSelected)
+                  GestureDetector(
+                    onTap: _openGoogleFlights,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(color: kTeal, borderRadius: BorderRadius.circular(20)),
+                      child: const Text('Book on Google →',
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                    ),
+                  )
+                else
+                  _pill('Select', kBackground, kTeal),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1467,158 +1634,6 @@ class _TravelScreenState extends State<TravelScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildFlightCard(FlightOption f, String originLabel) {
-    final isSelected = _selectedFlight?.flightNo == f.flightNo;
-    final cabinMultiplier = cabinClasses
-        .firstWhere((c) => c['label'] == _cabinClass)['multiplier'] as double;
-    final totalPrice = f.price * cabinMultiplier * _passengers;
-
-    return GestureDetector(
-      onTap: () => setState(() => _selectedFlight = f),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? kTealLight : kCard,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: isSelected ? kTeal : const Color(0xFFDDE4E8),
-              width: isSelected ? 1.5 : 0.5),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                      color: kBackground,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Center(
-                      child: Text('✈️', style: TextStyle(fontSize: 18))),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(f.airline,
-                          style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: kTextPrimary)),
-                      Text('${f.flightNo} · $_cabinClass',
-                          style: const TextStyle(
-                              fontSize: 11, color: kTextSecondary)),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(_formatPrice(totalPrice),
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: kTeal)),
-                    Text('$_passengers pax · $_cabinClass',
-                        style: const TextStyle(
-                            fontSize: 10, color: kTextSecondary)),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(f.departure,
-                          style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: kTextPrimary)),
-                      Text(originLabel,
-                          style: const TextStyle(
-                              fontSize: 10, color: kTextSecondary)),
-                    ]),
-                Expanded(
-                  child: Column(children: [
-                    Text(f.duration,
-                        style: const TextStyle(
-                            fontSize: 10, color: kTextSecondary)),
-                    Row(children: [
-                      Expanded(
-                          child: Container(
-                              height: 1,
-                              color: const Color(0xFFDDE4E8))),
-                      const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4),
-                          child: Text('✈️',
-                              style: TextStyle(fontSize: 12))),
-                      Expanded(
-                          child: Container(
-                              height: 1,
-                              color: const Color(0xFFDDE4E8))),
-                    ]),
-                    Text(
-                        f.stops == 0
-                            ? 'Non-stop'
-                            : '${f.stops} stop',
-                        style: const TextStyle(
-                            fontSize: 10, color: kTextSecondary)),
-                  ]),
-                ),
-                Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(f.arrival,
-                          style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: kTextPrimary)),
-                      Text(
-                          _selectedDestinationCountry?.name ?? '',
-                          style: const TextStyle(
-                              fontSize: 10, color: kTextSecondary)),
-                    ]),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _badge(_tierLabel(f.type), _tierBg(f.type),
-                    _tierColor(f.type)),
-                const Spacer(),
-                if (isSelected)
-                  GestureDetector(
-                    onTap: _openGoogleFlights,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                          color: kTeal,
-                          borderRadius: BorderRadius.circular(20)),
-                      child: const Text('Book on Google →',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600)),
-                    ),
-                  )
-                else
-                  _pill('Select', kBackground, kTeal),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -2135,8 +2150,9 @@ class _TravelScreenState extends State<TravelScreen> {
               scrollDirection: Axis.horizontal,
               children: items.map((item) {
                 if (item is HotelOption) return _mapHotelChip(item);
-                if (item is TravelTransport)
+                if (item is TravelTransport) {
                   return _mapTransportChip(item);
+                }
                 return const SizedBox();
               }).toList(),
             ),
@@ -2464,8 +2480,9 @@ class _TravelScreenState extends State<TravelScreen> {
                     firstDate: DateTime.now(),
                     lastDate: DateTime.now()
                         .add(const Duration(days: 365)));
-                if (d != null && mounted)
+                if (d != null && mounted) {
                   setState(() => _departureDate = d);
+                }
               })),
               const SizedBox(width: 10),
               Expanded(
@@ -2480,9 +2497,10 @@ class _TravelScreenState extends State<TravelScreen> {
                 if (d != null && mounted) {
                   setState(() {
                     _returnDate = d;
-                    if (_departureDate != null)
+                    if (_departureDate != null) {
                       _nights =
                           d.difference(_departureDate!).inDays;
+                    }
                   });
                 }
               })),
@@ -2666,7 +2684,7 @@ class _TravelScreenState extends State<TravelScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 18),
         itemCount: options.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (_, i) {
           final active = selected == options[i];
           return GestureDetector(

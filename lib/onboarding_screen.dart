@@ -143,13 +143,14 @@ class OnboardPage1 extends StatelessWidget {
             style: TextStyle(fontSize: 16, color: Colors.black54),
           ),
           const SizedBox(height: 40),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          // FIXED: Changed Row to Wrap to prevent overflow
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.center,
             children: [
               _FeatureChip(icon: Icons.task_alt, label: 'AI Tasks'),
-              const SizedBox(width: 12),
               _FeatureChip(icon: Icons.mic, label: 'AI Notes'),
-              const SizedBox(width: 12),
               _FeatureChip(icon: Icons.flight, label: 'Travel'),
             ],
           ),
@@ -197,11 +198,19 @@ class OnboardPage2 extends StatelessWidget {
             style: TextStyle(fontSize: 16, color: Colors.black54),
           ),
           const SizedBox(height: 32),
-          _TaskItem(title: 'Morning standup', tag: 'Done', done: true),
-          const SizedBox(height: 12),
-          _TaskItem(title: 'Prepare Paris report', tag: 'High', done: false),
-          const SizedBox(height: 12),
-          _TaskItem(title: 'Book hotel for trip', tag: 'AI', done: false),
+          // FIXED: Wrapped task items in ConstrainedBox to prevent overflow
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              children: [
+                _TaskItem(title: 'Morning standup', tag: 'Done', done: true),
+                const SizedBox(height: 12),
+                _TaskItem(title: 'Prepare Paris report', tag: 'High', done: false),
+                const SizedBox(height: 12),
+                _TaskItem(title: 'Book hotel for trip', tag: 'AI', done: false),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -246,7 +255,9 @@ class OnboardPage3 extends StatelessWidget {
             style: TextStyle(fontSize: 16, color: Colors.black54),
           ),
           const SizedBox(height: 32),
+          // FIXED: Added margin and constraints to prevent overflow
           Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -261,8 +272,12 @@ class OnboardPage3 extends StatelessWidget {
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('LOS → Paris',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                Flexible(
+                  child: Text('LOS → Paris',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis),
+                ),
+                SizedBox(width: 8),
                 Text('Direct · 6h 50m',
                     style: TextStyle(color: Colors.grey)),
               ],
@@ -293,11 +308,14 @@ class _FeatureChip extends StatelessWidget {
         ],
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 18, color: const Color(0xFF00BCD4)),
           const SizedBox(width: 6),
-          Text(label,
-              style: const TextStyle(fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
         ],
       ),
     );
@@ -326,22 +344,28 @@ class _TaskItem extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Icon(
-                done ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: done ? Colors.green : Colors.grey,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  decoration: done ? TextDecoration.lineThrough : null,
-                  color: done ? Colors.grey : Colors.black87,
+          Expanded(
+            child: Row(
+              children: [
+                Icon(
+                  done ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: done ? Colors.green : Colors.grey,
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      decoration: done ? TextDecoration.lineThrough : null,
+                      color: done ? Colors.grey : Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
