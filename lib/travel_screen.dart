@@ -394,7 +394,6 @@ class TravelScreen extends StatefulWidget {
 class _TravelScreenState extends State<TravelScreen> with SingleTickerProviderStateMixin {
   // Tab controller for Flights vs Interstate
   late TabController _tabController;
-  int _selectedTab = 0;
 
   // Your existing flow state
   int _step = 0;
@@ -443,11 +442,6 @@ class _TravelScreenState extends State<TravelScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() => _selectedTab = _tabController.index);
-      }
-    });
     _loadCountriesFromSupabase();
     _loadActiveBooking();
     _loadInterstateData();
@@ -460,24 +454,22 @@ class _TravelScreenState extends State<TravelScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  // ─── LOAD INTERSTATE DATA ─────────────────────────────────────────────────
-  Future<void> _loadInterstateData() async {
-    try {
-      final data = await TravelService.fetchCountriesWithRoutes();
-      setState(() {
-        _interstateCountries = data;
-        _loadingInterstateCountries = false;
-      });
-      final modes = await TravelService.fetchTransportModes();
-      setState(() => _transportModes = modes);
-    } catch (e) {
-      setState(() {
-        _interstateError = 'Failed to load interstate data';
-        _loadingInterstateCountries = false;
-      });
-    }
+  // ─── SECTION LABEL WIDGET ───────────────────────────────────────────────────
+  Widget _sectionLabel(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Colors.black87,
+        ),
+      ),
+    );
   }
 
+ 
   // ─── YOUR EXISTING METHODS (unchanged) ────────────────────────────────────
   Future<void> _loadActiveBooking() async {
     setState(() => _isLoadingActiveBooking = true);
@@ -1061,9 +1053,57 @@ class _TravelScreenState extends State<TravelScreen> with SingleTickerProviderSt
     );
   }
 
+  // ADD THIS MISSING METHOD HERE:
   Widget _buildInterstateCountryPicker() {
     if (_loadingInterstateCountries) {
       return const Center(child: CircularProgressIndicator(color: kTeal));
+    }
+
+    if (_interstateError != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('⚠️', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 16),
+            Text(_interstateError!, style: const TextStyle(color: kTextPrimary)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadInterstateData,
+              style: ElevatedButton.styleFrom(backgroundColor: kTeal),
+              child: const Text('Retry', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_interstateCountries.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('🚌', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 16),
+            const Text(
+              'No countries available',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: kTextPrimary),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Interstate routes will appear here\nonce data is available',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: kTextSecondary),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _loadInterstateData,
+              style: ElevatedButton.styleFrom(backgroundColor: kTeal),
+              child: const Text('Refresh', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
     }
 
     return Column(
@@ -1092,6 +1132,32 @@ class _TravelScreenState extends State<TravelScreen> with SingleTickerProviderSt
         ),
       ],
     );
+  }
+
+  Future<void> _loadInterstateData() async {
+    setState(() {
+      _loadingInterstateCountries = true;
+      _interstateError = null;
+    });
+    
+    try {
+      final data = await TravelService.fetchCountriesWithRoutes();
+      
+      setState(() {
+        _interstateCountries = data;
+        _loadingInterstateCountries = false;
+      });
+      
+      if (data.isNotEmpty) {
+        final modes = await TravelService.fetchTransportModes();
+        setState(() => _transportModes = modes);
+      }
+    } catch (e) {
+      setState(() {
+        _interstateError = 'Failed to load: $e';
+        _loadingInterstateCountries = false;
+      });
+    }
   }
 
   Widget _buildInterstateCountryTile(CountryModel country) {
@@ -1433,7 +1499,7 @@ class _TravelScreenState extends State<TravelScreen> with SingleTickerProviderSt
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   itemCount: filtered.length,
-                  itemBuilder: (ctx, i) => _InterstateRouteCard(
+                  itemBuilder: (ctx, i) => InterstateRouteCard(
                     route: filtered[i],
                     currency: _selectedInterstateCountry?.currency,
                   ),
@@ -3617,17 +3683,17 @@ class _TravelScreenState extends State<TravelScreen> with SingleTickerProviderSt
 }
 
 // ─── INTERSTATE ROUTE CARD WIDGET ───────────────────────────────────────────
-class _InterstateRouteCard extends StatefulWidget {
+class InterstateRouteCard extends StatefulWidget {
   final InterstateRoute route;
   final String? currency;
 
-  const _InterstateRouteCard({required this.route, this.currency});
+  const InterstateRouteCard({super.key, required this.route, this.currency});
 
   @override
-  State<_InterstateRouteCard> createState() => _InterstateRouteCardState();
+  State<InterstateRouteCard> createState() => _InterstateRouteCardState();
 }
 
-class _InterstateRouteCardState extends State<_InterstateRouteCard> {
+class _InterstateRouteCardState extends State<InterstateRouteCard> {
   bool _expanded = false;
 
   @override
