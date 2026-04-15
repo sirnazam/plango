@@ -1,7 +1,7 @@
-import 'supabase_service.dart';
-import 'signin_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'dart:math' as math;
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -10,1016 +10,859 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  bool _notifications = true;
-  bool _darkMode = false;
-  bool _aiSuggestions = true;
+class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMixin {
   String _userName = '';
   String _userEmail = '';
-  int _tasksDone = 0;
-  int _tripsPlanned = 0;
-  int _aiNotes = 0;
   bool _isLoading = true;
+  bool _autoCreateTasks = true;
+  bool _smartScheduling = true;
+  String _aiTone = 'Friendly';
+  bool _notificationsEnabled = true;
+  String _themeMode = 'Light';
+
+  final List<String> _aiTones = ['Casual', 'Friendly', 'Professional', 'Energetic'];
+
+  late AnimationController _logoAnimationController;
+  late AnimationController _pulseAnimationController;
 
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    _logoAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..forward();
+    
+    _pulseAnimationController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _loadUserData();
   }
 
-  Future<void> _loadStats() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _logoAnimationController.dispose();
+    _pulseAnimationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUserData() async {
     try {
-      final user = SupabaseService.currentUser;
-      if (user == null) return;
-
-      // Load profile, tasks and notes in parallel
-      final results = await Future.wait([
-        SupabaseService.getProfile(),
-        SupabaseService.getTasks(),
-        SupabaseService.getNotes(),
-      ]);
-
-      final profile = results[0] as Map<String, dynamic>?;
-      final tasks = results[1] as List<Map<String, dynamic>>;
-      final notes = results[2] as List<Map<String, dynamic>>;
-
-      setState(() {
-        _userName = profile?['full_name'] ?? user.email ?? 'User';
-        _userEmail = user.email ?? '';
-        _tasksDone = tasks.where((t) => t['done'] == true).length;
-        _aiNotes = notes.length;
-        _tripsPlanned = 3; // static for now
-      });
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        final response = await Supabase.instance.client
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .single();
+        setState(() {
+          _userName = response['full_name'] ?? 'User';
+          _userEmail = user.email ?? '';
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      // use defaults silently
-    } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _signOut() async {
-    // Show confirmation dialog first
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sign Out',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
+  Future<void> _savePreferences() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(
+              'Preferences saved!',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
       ),
     );
+  }
 
-    if (confirm != true) return;
-
-    try {
-      await SupabaseService.signOut();
-      if (mounted) {
-        // Clear entire navigation stack and go to SignIn
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SignInScreen()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sign out failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+  Future<void> _logout() async {
+    await Supabase.instance.client.auth.signOut();
+    if (mounted) {
+      Navigator.pushNamedAndRemoveUntil(context, '/signin', (route) => false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: _darkMode ? ThemeData.dark() : ThemeData.light(),
-      home: Scaffold(
-        backgroundColor:
-            _darkMode ? const Color(0xFF121212) : const Color(0xFFEAF4FB),
-        appBar: AppBar(
-          backgroundColor:
-              _darkMode ? const Color(0xFF121212) : const Color(0xFFEAF4FB),
-          elevation: 0,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back,
-                color: _darkMode ? Colors.white : Colors.black87),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Text(
-            'Profile',
-            style: TextStyle(
-              color: _darkMode ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        body: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF00BCD4)),
-              )
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    // Avatar
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00BCD4),
-                        borderRadius: BorderRadius.circular(20),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F4F8),
+      body: CustomScrollView(
+        slivers: [
+          // Animated App Bar with Plango Branding
+          SliverAppBar(
+            expandedHeight: 280,
+            floating: false,
+            pinned: true,
+            backgroundColor: const Color(0xFF00BCD4),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF00BCD4),
+                      Color(0xFF26C6DA),
+                      Color(0xFF4DD0E1),
+                    ],
+                  ),
+                ),
+                child: SafeArea(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Animated Plango Logo
+                      AnimatedBuilder(
+                        animation: _pulseAnimationController,
+                        builder: (context, child) {
+                          return Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.4),
+                                width: 3,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.white.withOpacity(0.3),
+                                  blurRadius: 20 + (_pulseAnimationController.value * 10),
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  // Rotating outer ring
+                                  AnimatedBuilder(
+                                    animation: _logoAnimationController,
+                                    builder: (context, child) {
+                                      return Transform.rotate(
+                                        angle: _logoAnimationController.value * 2 * math.pi,
+                                        child: Container(
+                                          width: 100,
+                                          height: 100,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: Colors.white.withOpacity(0.3),
+                                              width: 2,
+                                              style: BorderStyle.solid,
+                                            ),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  // Logo Icon
+                                  const Icon(
+                                    Icons.auto_awesome_rounded,
+                                    size: 50,
+                                    color: Colors.white,
+                                  ),
+                                  // Orbiting dots
+                                  ...List.generate(3, (index) {
+                                    final angle = (index * 120 + (_logoAnimationController.value * 360)) * 
+                                        (math.pi / 180);
+                                    return Transform.translate(
+                                      offset: Offset(
+                                        math.cos(angle) * 45,
+                                        math.sin(angle) * 45,
+                                      ),
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      child: const Icon(Icons.person,
-                          color: Colors.white, size: 40),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Name & Email
-                    Text(
-                      _userName,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: _darkMode ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _userEmail,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color:
-                            _darkMode ? Colors.white54 : Colors.black54,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Edit Profile Button
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF00BCD4)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+                      const SizedBox(height: 20),
+                      // Plango Brand Name
+                      Text(
+                        'Plango',
+                        style: GoogleFonts.inter(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 1,
                         ),
                       ),
-                      onPressed: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => EditProfileScreen(
-                              currentName: _userName,
-                              currentEmail: _userEmail,
-                              onSave: (name, email) {
-                                setState(() {
-                                  _userName = name;
-                                  _userEmail = email;
-                                });
-                              },
+                      Text(
+                        'Your AI Planning Companion',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.9),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            leading: IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.arrow_back, color: Colors.white),
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: TextButton(
+                  onPressed: _savePreferences,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      'Save',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Content
+          SliverToBoxAdapter(
+            child: _isLoading
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(40),
+                      child: CircularProgressIndicator(color: Color(0xFF00BCD4)),
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        // User Profile Card
+                        _buildGlassCard(
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 70,
+                                    height: 70,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFF00BCD4), Color(0xFF26C6DA)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF00BCD4).withOpacity(0.3),
+                                          blurRadius: 15,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _userName,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _userEmail,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, color: Color(0xFF00BCD4)),
+                                    onPressed: () {
+                                      // Edit profile
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // AI Preferences Section
+                        _buildSectionHeader(
+                          icon: Icons.auto_awesome_rounded,
+                          title: 'AI Preferences',
+                          color: const Color(0xFF00BCD4),
+                        ),
+                        _buildGlassCard(
+                          child: Column(
+                            children: [
+                              _buildDropdownRow(
+                                icon: Icons.chat_bubble_outline,
+                                title: 'AI Tone',
+                                subtitle: 'How Plango communicates with you',
+                                value: _aiTone,
+                                items: _aiTones,
+                                onChanged: (value) => setState(() => _aiTone = value!),
+                              ),
+                              const Divider(height: 1, indent: 56),
+                              _buildSwitchRow(
+                                icon: Icons.task_alt,
+                                title: 'Auto-create tasks',
+                                subtitle: 'Plango automatically creates tasks from conversations',
+                                value: _autoCreateTasks,
+                                onChanged: (val) => setState(() => _autoCreateTasks = val),
+                              ),
+                              const Divider(height: 1, indent: 56),
+                              _buildSwitchRow(
+                                icon: Icons.schedule,
+                                title: 'Smart scheduling',
+                                subtitle: 'Plango suggests optimal times for your tasks',
+                                value: _smartScheduling,
+                                onChanged: (val) => setState(() => _smartScheduling = val),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // App Settings Section
+                        _buildSectionHeader(
+                          icon: Icons.settings,
+                          title: 'App Settings',
+                          color: Colors.grey,
+                        ),
+                        _buildGlassCard(
+                          child: Column(
+                            children: [
+                              _buildSwitchRow(
+                                icon: Icons.notifications_outlined,
+                                title: 'Push Notifications',
+                                subtitle: 'Receive alerts for tasks and events',
+                                value: _notificationsEnabled,
+                                onChanged: (val) => setState(() => _notificationsEnabled = val),
+                              ),
+                              const Divider(height: 1, indent: 56),
+                              _buildDropdownRow(
+                                icon: Icons.dark_mode_outlined,
+                                title: 'Theme',
+                                subtitle: 'Choose your preferred appearance',
+                                value: _themeMode,
+                                items: ['Light', 'Dark', 'System'],
+                                onChanged: (value) => setState(() => _themeMode = value!),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Productivity Stats
+                        _buildSectionHeader(
+                          icon: Icons.analytics,
+                          title: 'Your Productivity',
+                          color: Colors.orange,
+                        ),
+                        _buildGlassCard(
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _buildStatCard('12', 'Tasks Done', Colors.green, Icons.check_circle),
+                                  _buildStatCard('8', 'AI Tasks', const Color(0xFF00BCD4), Icons.auto_awesome),
+                                  _buildStatCard('4h', 'Focus Time', Colors.orange, Icons.timer),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.green.withOpacity(0.1),
+                                      const Color(0xFF00BCD4).withOpacity(0.1),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(
+                                        Icons.trending_up,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Great progress this week!',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                          Text(
+                                            'You\'ve completed 25% more tasks than last week',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // About Plango
+                        _buildGlassCard(
+                          child: Column(
+                            children: [
+                              ListTile(
+                                leading: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00BCD4).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.info_outline,
+                                    color: Color(0xFF00BCD4),
+                                    size: 22,
+                                  ),
+                                ),
+                                title: Text(
+                                  'About Plango',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Version 1.0.0',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                              ),
+                              const Divider(height: 1, indent: 72),
+                              ListTile(
+                                leading: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.purple.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.star_outline,
+                                    color: Colors.purple,
+                                    size: 22,
+                                  ),
+                                ),
+                                title: Text(
+                                  'Rate Plango',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Logout Button
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                              ),
+                            ],
+                          ),
+                          child: TextButton(
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                  title: Text(
+                                    'Logout',
+                                    style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                                  ),
+                                  content: Text(
+                                    'Are you sure you want to logout?',
+                                    style: GoogleFonts.inter(),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: Text(
+                                        'Cancel',
+                                        style: GoogleFonts.inter(color: Colors.grey),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: _logout,
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                        backgroundColor: Colors.red.withOpacity(0.1),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Logout',
+                                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.logout, color: Colors.red.shade400, size: 22),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Logout',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.red.shade400,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        );
-                        // Reload in case name was changed
-                        _loadStats();
-                      },
-                      child: const Text(
-                        'Edit Profile',
-                        style: TextStyle(color: Color(0xFF00BCD4)),
-                      ),
-                    ),
+                        ),
 
-                    const SizedBox(height: 24),
-
-                    // Stats Row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.check_circle,
-                            iconColor: Colors.green,
-                            value: '$_tasksDone',
-                            label: 'Tasks Done',
-                            darkMode: _darkMode,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.flight,
-                            iconColor: Colors.orange,
-                            value: '$_tripsPlanned',
-                            label: 'Trips Planned',
-                            darkMode: _darkMode,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.mic,
-                            iconColor: Colors.purple,
-                            value: '$_aiNotes',
-                            label: 'AI Notes',
-                            darkMode: _darkMode,
-                          ),
-                        ),
+                        const SizedBox(height: 30),
                       ],
                     ),
-
-                    const SizedBox(height: 24),
-
-                    // Preferences
-                    _SectionHeader(
-                        title: 'Preferences', darkMode: _darkMode),
-                    const SizedBox(height: 10),
-
-                    _ToggleRow(
-                      icon: Icons.notifications_outlined,
-                      label: 'Notifications',
-                      value: _notifications,
-                      darkMode: _darkMode,
-                      onChanged: (val) =>
-                          setState(() => _notifications = val),
-                    ),
-                    const SizedBox(height: 8),
-                    _ToggleRow(
-                      icon: Icons.dark_mode_outlined,
-                      label: 'Dark Mode',
-                      value: _darkMode,
-                      darkMode: _darkMode,
-                      onChanged: (val) =>
-                          setState(() => _darkMode = val),
-                    ),
-                    const SizedBox(height: 8),
-                    _ToggleRow(
-                      icon: Icons.auto_awesome_outlined,
-                      label: 'AI Suggestions',
-                      value: _aiSuggestions,
-                      darkMode: _darkMode,
-                      onChanged: (val) =>
-                          setState(() => _aiSuggestions = val),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Account
-                    _SectionHeader(title: 'Account', darkMode: _darkMode),
-                    const SizedBox(height: 10),
-
-                    _ArrowRow(
-                      icon: Icons.lock_outline,
-                      label: 'Change Password',
-                      darkMode: _darkMode,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const ChangePasswordScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    _ArrowRow(
-                      icon: Icons.help_outline,
-                      label: 'Help & Support',
-                      darkMode: _darkMode,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const HelpScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    _ArrowRow(
-                      icon: Icons.privacy_tip_outlined,
-                      label: 'Privacy Policy',
-                      darkMode: _darkMode,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const PrivacyScreen(),
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // Sign Out
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        onPressed: _signOut,
-                        icon: const Icon(Icons.logout, color: Colors.white),
-                        label: const Text(
-                          'Sign Out',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-      ),
-    );
-  }
-}
-
-// ── EDIT PROFILE SCREEN ──
-class EditProfileScreen extends StatefulWidget {
-  final String currentName;
-  final String currentEmail;
-  final Function(String, String) onSave;
-
-  const EditProfileScreen({
-    super.key,
-    required this.currentName,
-    required this.currentEmail,
-    required this.onSave,
-  });
-
-  @override
-  State<EditProfileScreen> createState() => _EditProfileScreenState();
-}
-
-class _EditProfileScreenState extends State<EditProfileScreen> {
-  late TextEditingController _nameController;
-  late TextEditingController _emailController;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.currentName);
-    _emailController = TextEditingController(text: widget.currentEmail);
-  }
-
-  Future<void> _save() async {
-    setState(() => _isSaving = true);
-    try {
-      final success = await SupabaseService.upsertProfile(
-        fullName: _nameController.text,
-      );
-      if (success) {
-        widget.onSave(_nameController.text, _emailController.text);
-        if (context.mounted) Navigator.pop(context);
-      } else {
-        throw Exception('Failed to save profile');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-    setState(() => _isSaving = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFEAF4FB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFEAF4FB),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Edit Profile',
-            style: TextStyle(
-                color: Colors.black87, fontWeight: FontWeight.bold)),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _save,
-            child: const Text('Save',
-                style: TextStyle(
-                    color: Color(0xFF00BCD4),
-                    fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            // Avatar
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFF00BCD4),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child:
-                  const Icon(Icons.person, color: Colors.white, size: 40),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () {},
-              child: const Text('Change Photo',
-                  style: TextStyle(color: Color(0xFF00BCD4))),
-            ),
-            const SizedBox(height: 24),
-            _InputField(
-                label: 'Full Name', controller: _nameController),
-            const SizedBox(height: 16),
-            _InputField(
-                label: 'Email',
-                controller: _emailController,
-                enabled: false),
-            const SizedBox(height: 32),
-            if (_isSaving)
-              const CircularProgressIndicator(color: Color(0xFF00BCD4))
-            else
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00BCD4),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
                   ),
-                  onPressed: _save,
-                  child: const Text('Save Changes',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold)),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── CHANGE PASSWORD SCREEN ──
-class ChangePasswordScreen extends StatefulWidget {
-  const ChangePasswordScreen({super.key});
-
-  @override
-  State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
-}
-
-class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
-  final _newPasswordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  bool _obscureNew = true;
-  bool _obscureConfirm = true;
-  bool _isSaving = false;
-
-  Future<void> _changePassword() async {
-    if (_newPasswordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Passwords do not match'),
-            backgroundColor: Colors.red),
-      );
-      return;
-    }
-    setState(() => _isSaving = true);
-    try {
-      await Supabase.instance.client.auth
-          .updateUser(UserAttributes(
-              password: _newPasswordController.text));
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Password updated successfully!'),
-              backgroundColor: Colors.green),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: Colors.red),
-        );
-      }
-    }
-    setState(() => _isSaving = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFEAF4FB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFEAF4FB),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Change Password',
-            style: TextStyle(
-                color: Colors.black87, fontWeight: FontWeight.bold)),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            const Icon(Icons.lock_outline,
-                size: 60, color: Color(0xFF00BCD4)),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _newPasswordController,
-              obscureText: _obscureNew,
-              decoration: InputDecoration(
-                labelText: 'New Password',
-                prefixIcon: const Icon(Icons.lock_outline,
-                    color: Color(0xFF00BCD4)),
-                suffixIcon: IconButton(
-                  icon: Icon(_obscureNew
-                      ? Icons.visibility_off
-                      : Icons.visibility),
-                  onPressed: () =>
-                      setState(() => _obscureNew = !_obscureNew),
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _confirmPasswordController,
-              obscureText: _obscureConfirm,
-              decoration: InputDecoration(
-                labelText: 'Confirm New Password',
-                prefixIcon: const Icon(Icons.lock_outline,
-                    color: Color(0xFF00BCD4)),
-                suffixIcon: IconButton(
-                  icon: Icon(_obscureConfirm
-                      ? Icons.visibility_off
-                      : Icons.visibility),
-                  onPressed: () => setState(
-                      () => _obscureConfirm = !_obscureConfirm),
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 32),
-            if (_isSaving)
-              const CircularProgressIndicator(color: Color(0xFF00BCD4))
-            else
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00BCD4),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                  ),
-                  onPressed: _changePassword,
-                  child: const Text('Update Password',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold)),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── HELP SCREEN ──
-class HelpScreen extends StatelessWidget {
-  const HelpScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFEAF4FB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFEAF4FB),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Help & Support',
-            style: TextStyle(
-                color: Colors.black87, fontWeight: FontWeight.bold)),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const Icon(Icons.help_outline,
-              size: 60, color: Color(0xFF00BCD4)),
-          const SizedBox(height: 16),
-          const Text('Frequently Asked Questions',
-              style:
-                  TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          _FaqItem(
-            question: 'How do I add a task?',
-            answer:
-                'Go to the Tasks tab and tap the Add Task button. Fill in the title and priority then tap Add.',
-          ),
-          _FaqItem(
-            question: 'How does AI Notes work?',
-            answer:
-                'Go to the Notes tab and tap the mic button. Speak your note — PLANGO will transcribe and summarize it automatically.',
-          ),
-          _FaqItem(
-            question: 'How do I book a flight?',
-            answer:
-                'Go to the Travel tab, tap Book Flight, enter your route and dates then browse results.',
-          ),
-          _FaqItem(
-            question: 'How do I reset my password?',
-            answer:
-                'Go to Profile → Change Password. Enter your new password and confirm it.',
-          ),
-          const SizedBox(height: 24),
-          const Text('Still need help?',
-              style:
-                  TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00BCD4),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-            ),
-            onPressed: () {},
-            icon: const Icon(Icons.email_outlined, color: Colors.white),
-            label: const Text('Contact Support',
-                style: TextStyle(color: Colors.white, fontSize: 15)),
           ),
         ],
       ),
     );
   }
-}
 
-// ── PRIVACY SCREEN ──
-class PrivacyScreen extends StatelessWidget {
-  const PrivacyScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFEAF4FB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFEAF4FB),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Privacy Policy',
-            style: TextStyle(
-                color: Colors.black87, fontWeight: FontWeight.bold)),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: const [
-          Icon(Icons.privacy_tip_outlined,
-              size: 60, color: Color(0xFF00BCD4)),
-          SizedBox(height: 16),
-          Text('Privacy Policy',
-              style:
-                  TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center),
-          SizedBox(height: 8),
-          Text('Last updated: April 2026',
-              style: TextStyle(color: Colors.grey),
-              textAlign: TextAlign.center),
-          SizedBox(height: 24),
-          _PrivacySection(
-            title: '1. Data We Collect',
-            body:
-                'PLANGO collects your name, email, tasks, notes, and travel plans to provide our service. We do not sell your data to third parties.',
-          ),
-          _PrivacySection(
-            title: '2. How We Use Your Data',
-            body:
-                'Your data is used to power AI features, sync your tasks and notes, and personalize your travel recommendations.',
-          ),
-          _PrivacySection(
-            title: '3. Data Storage',
-            body:
-                'Your data is securely stored using Supabase with industry-standard encryption. All data is backed up regularly.',
-          ),
-          _PrivacySection(
-            title: '4. Your Rights',
-            body:
-                'You can request deletion of your account and all associated data at any time by contacting our support team.',
-          ),
-          _PrivacySection(
-            title: '5. Contact',
-            body: 'For privacy concerns, contact us at privacy@plango.app',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── HELPER WIDGETS ──
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String value;
-  final String label;
-  final bool darkMode;
-
-  const _StatCard({
-    required this.icon,
-    required this.iconColor,
-    required this.value,
-    required this.label,
-    required this.darkMode,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: darkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6)],
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: iconColor, size: 28),
-          const SizedBox(height: 6),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: darkMode ? Colors.white : Colors.black87)),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 11,
-                  color: darkMode ? Colors.white54 : Colors.black54),
-              textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final bool darkMode;
-
-  const _SectionHeader({required this.title, required this.darkMode});
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: darkMode ? Colors.white : Colors.black87,
-        ),
-      ),
-    );
-  }
-}
-
-class _ToggleRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool value;
-  final bool darkMode;
-  final Function(bool) onChanged;
-
-  const _ToggleRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.darkMode,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: darkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-      ),
+  Widget _buildSectionHeader({
+    required IconData icon,
+    required String title,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, bottom: 12),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF00BCD4), size: 22),
-          const SizedBox(width: 14),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGlassCard({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String value,
+    required List<String> items,
+    required Function(String?) onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: Colors.grey.shade600, size: 22),
+          ),
+          const SizedBox(width: 16),
           Expanded(
-            child: Text(label,
-                style: TextStyle(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
                     fontSize: 15,
-                    color: darkMode ? Colors.white : Colors.black87)),
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00BCD4).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: value,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Color(0xFF00BCD4)),
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF00BCD4),
+                ),
+                items: items.map((item) {
+                  return DropdownMenuItem(
+                    value: item,
+                    child: Text(item),
+                  );
+                }).toList(),
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSwitchRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required Function(bool) onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: Colors.grey.shade600, size: 22),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ],
+            ),
           ),
           Switch(
             value: value,
             onChanged: onChanged,
             activeColor: const Color(0xFF00BCD4),
+            activeTrackColor: const Color(0xFF00BCD4).withOpacity(0.3),
           ),
         ],
       ),
     );
   }
-}
 
-class _ArrowRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool darkMode;
-  final VoidCallback onTap;
-
-  const _ArrowRow({
-    required this.icon,
-    required this.label,
-    required this.darkMode,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: darkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: const Color(0xFF00BCD4), size: 22),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(label,
-                  style: TextStyle(
-                      fontSize: 15,
-                      color:
-                          darkMode ? Colors.white : Colors.black87)),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.grey),
+  Widget _buildStatCard(String value, String label, Color color, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.15),
+            color.withOpacity(0.05),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _InputField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final bool enabled;
-
-  const _InputField({
-    required this.label,
-    required this.controller,
-    this.enabled = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      enabled: enabled,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: enabled ? Colors.white : Colors.grey.shade100,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide:
-              const BorderSide(color: Color(0xFF00BCD4), width: 2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 1,
         ),
       ),
-    );
-  }
-}
-
-class _FaqItem extends StatefulWidget {
-  final String question;
-  final String answer;
-
-  const _FaqItem({required this.question, required this.answer});
-
-  @override
-  State<_FaqItem> createState() => _FaqItemState();
-}
-
-class _FaqItemState extends State<_FaqItem> {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-      ),
-      child: ExpansionTile(
-        title: Text(widget.question,
-            style: const TextStyle(
-                fontWeight: FontWeight.w600, fontSize: 14)),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Text(widget.answer,
-                style: const TextStyle(
-                    color: Colors.black54, fontSize: 13)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrivacySection extends StatelessWidget {
-  final String title;
-  final String body;
-
-  const _PrivacySection({required this.title, required this.body});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
-          Text(body,
-              style: const TextStyle(
-                  fontSize: 13,
-                  color: Colors.black54,
-                  height: 1.6)),
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
         ],
       ),
     );

@@ -1,9 +1,9 @@
-import 'notes_screen.dart';
-import 'calendar_screen.dart';
-import 'profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'travel_screen.dart';
+import 'ai_home_screen.dart';
+import 'profile_screen.dart';
+import 'package:plango/calendar_screen.dart' as cal;
+import 'package:plango/notes_screen.dart' as note;
 
 class Task {
   String? id;
@@ -161,64 +161,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFEAF4FB),
       body: _getScreen(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        selectedItemColor: const Color(0xFF00BCD4),
-        unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
-        type: BottomNavigationBarType.fixed,
-        selectedFontSize: 10,
-        unselectedFontSize: 10,
-        iconSize: 22,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.task_outlined),
-            activeIcon: Icon(Icons.task),
-            label: 'Tasks',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month_outlined),
-            activeIcon: Icon(Icons.calendar_month),
-            label: 'Calendar',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.flight_outlined),
-            activeIcon: Icon(Icons.flight),
-            label: 'Travel',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.mic_outlined),
-            activeIcon: Icon(Icons.mic),
-            label: 'Notes',
-          ),
-        ],
-      ),
+      // No bottomNavigationBar here - each screen has its own navigation
     );
   }
 
   Widget _getScreen() {
     switch (_currentIndex) {
       case 0:
-        return HomeTab(
-          tasks: _tasks,
-          userName: _userName,
-          isLoading: _isLoading,
-          onToggleTask: _toggleTask,
-          onDeleteTask: _deleteTask,
-          onAddTask: _addTask,
-          onRefresh: _loadTasks,
-        );
+        return AIHomeScreen();
       case 1:
         return TasksTab(
           tasks: _tasks,
@@ -229,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onRefresh: _loadTasks,
         );
       case 2:
-        return const CalendarScreen();
+        return const cal.CalendarScreen();
       case 3:
         return const TravelTab();
       case 4:
@@ -773,7 +728,24 @@ class TravelTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const TravelScreen();
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.construction, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            'Travel feature coming soon!',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'We\'re building something amazing for you.',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -783,7 +755,7 @@ class NotesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const NotesScreen();
+    return note.NotesScreen();
   }
 }
 

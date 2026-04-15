@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 
 class MapScreen extends StatefulWidget {
@@ -23,9 +21,9 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   late MapController _mapController;
-  List<Marker> _markers = [];
-  List<Map<String, dynamic>> _nearbyPlaces = [];
-  bool _isLoading = false;
+  final List<Marker> _markers = [];
+
+  final bool _isLoading = false;
   String _selectedTab = 'hotels';
   LatLng? _currentLocation;
   LatLng? _destinationLocation;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:plango/home_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'onboarding_screen.dart';
-import 'travel_screen.dart';  // ← CHANGE THIS (was home_screen.dart)
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -35,7 +35,6 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Check auth after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       _checkAuthAndNavigate();
     });
@@ -47,15 +46,13 @@ class _SplashScreenState extends State<SplashScreen>
     final session = Supabase.instance.client.auth.currentSession;
 
     if (session != null) {
-      // User is logged in → go to TravelScreen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const TravelScreen(),  // ← CHANGE THIS
+          builder: (context) => const HomeScreen(),
         ),
       );
     } else {
-      // User is NOT logged in → go to Onboarding
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -89,11 +86,11 @@ class _SplashScreenState extends State<SplashScreen>
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black26,
                         blurRadius: 20,
-                        offset: const Offset(0, 10),
+                        offset: Offset(0, 10),
                       ),
                     ],
                   ),

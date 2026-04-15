@@ -2,7 +2,7 @@
 import 'home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'travel_screen.dart';  // ← CHANGED (was home_screen.dart)
+// ← CHANGED (was home_screen.dart)
 import 'signup_screen.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -51,7 +51,7 @@ class _SignInScreenState extends State<SignInScreen> {
           // ✅ Success! Go to TravelScreen
           Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const HomeScreen()),  // ✅ CORRECT
       );
         }
       }
